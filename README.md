@@ -18,6 +18,22 @@
 
 통화·위치·기기 상태와 주기 트리거는 다음 개발 단계의 준비 중 항목입니다.
 
+## 소스 구조
+
+```
+app/src/main/java/com/bonoskkm15/phonerelay/
+  PhoneRelayApp.kt          Application, 주기 전송 등록
+  collector/                출처별 수신부 (SmsReceiver, MmsScanner)
+  core/                     봉투·큐·전송 스케줄·설정·토큰·상주 서비스
+  rule/                     규칙 모델·저장소·템플릿 컴파일러·규칙 엔진 (Android 비의존)
+  transport/                HTTPS JSON, syslog TCP
+  ui/                       탭 3개와 규칙 마법사
+app/src/test/               규칙 엔진 JVM 단위 테스트
+```
+
+`rule/TemplateCompiler.kt`와 `rule/RuleEngine.preview()`는 Android API를 쓰지 않으므로
+에뮬레이터 없이 `./gradlew test`로 검증합니다.
+
 ## 서버 설정
 
 앱을 설치한 뒤 설정 화면에서 다음 값을 입력합니다.
@@ -34,21 +50,23 @@
 
 앱은 `accepted`에 포함된 이벤트만 전송 완료로 표시합니다.
 
-## IntelliJ IDEA에서 빌드
+## 빌드
 
-Android Studio 없이 IntelliJ IDEA와 명령줄 도구만으로 빌드할 수 있습니다. IntelliJ의 내장 Runtime(JBR)이 있으면 별도 Java 설치 없이 `JAVA_HOME`으로 지정할 수 있습니다.
-
-PowerShell에서 다음처럼 실행합니다.
+JDK 17 이상과 Android SDK(플랫폼 35)만 있으면 됩니다. Gradle은 래퍼가 알아서 내려받으므로 따로 설치하지 않아도 됩니다.
 
 ```powershell
-$env:JAVA_HOME = "C:\Users\KKM\.jdks\temurin-24.0.2"
-$env:ANDROID_USER_HOME = "$PWD\work\android-home"
-$env:GRADLE_USER_HOME = "$PWD\work\gradle-home"
+# Android SDK 위치를 local.properties 에 적거나 환경변수로 지정
+$env:ANDROID_HOME = "C:\Users\<계정>\AppData\Local\Android\Sdk"
 
-& "C:\Gradle\gradle-8.14.3\bin\gradle.bat" --no-daemon assembleDebug
+.\gradlew.bat test            # 규칙 엔진 단위 테스트
+.\gradlew.bat assembleDebug   # 디버그 APK
 ```
 
-생성 파일은 `app\build\outputs\apk\debug\app-debug.apk`입니다. IntelliJ에서 프로젝트를 연 뒤 Gradle 도구 창의 `app > Tasks > build > assembleDebug`를 눌러도 됩니다.
+macOS·Linux에서는 `./gradlew test`, `./gradlew assembleDebug`입니다.
+
+생성 파일은 `app\build\outputs\apk\debug\app-debug.apk`입니다.
+
+IDE는 IntelliJ IDEA(Android 플러그인)나 Android Studio 어느 쪽이든 됩니다. IntelliJ를 쓸 경우 AGP 버전이 플러그인 지원 범위 안에 있어야 하므로 `gradle/libs.versions.toml`의 `agp` 값을 함부로 올리지 않습니다. IDE 없이 명령줄만으로도 위 두 명령이면 충분합니다.
 
 실기기에서 SMS 수신·읽기 권한과 알림 접근 권한을 허용해야 합니다. LMS 보완 스캔은 알림 접근 서비스가 연결된 뒤 동작합니다.
 

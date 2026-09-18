@@ -104,9 +104,11 @@ object RuleEngine {
             )
         }
 
+        // 잘못된 자리표시자로 만들어진 정규식은 PatternSyntaxException 을 낼 수 있다.
+        // 수집 스레드가 죽지 않도록 컴파일·매칭 단계의 예외를 모두 규칙 오류로 바꾼다.
         val compiled = try {
             TemplateCompiler.compile(rule.template, rule.fields)
-        } catch (e: TemplateCompileException) {
+        } catch (e: RuntimeException) {
             return RulePreview(
                 considered = true,
                 matched = false,
@@ -114,7 +116,17 @@ object RuleEngine {
                 error = e.message ?: "템플릿 컴파일 오류",
             )
         }
-        return when (val result = compiled.match(raw, rule.match.mode, input.receivedAtMillis)) {
+        val result = try {
+            compiled.match(raw, rule.match.mode, input.receivedAtMillis)
+        } catch (e: RuntimeException) {
+            return RulePreview(
+                considered = true,
+                matched = false,
+                occurredAt = receivedIso(input.receivedAtMillis),
+                error = e.message ?: "템플릿 매칭 오류",
+            )
+        }
+        return when (result) {
             is TemplateMatch.Success -> {
                 val output = result.values.filterKeys { it in rule.output.fields }
                 val occurred = (rule.output.occurredAtField?.let { result.values[it] } as? String)

@@ -41,16 +41,8 @@ class AppSettings(ctx: Context) {
         get() = p.getBoolean("wifi_only", false)
         set(v) = p.edit { putBoolean("wifi_only", v) }
 
-    // ── 카드 SMS 수집기 ──
-    var cardSmsEnabled: Boolean
-        get() = p.getBoolean("card_sms_enabled", true)
-        set(v) = p.edit { putBoolean("card_sms_enabled", v) }
-
-    /** 허용 발신번호(숫자만). 비어 있으면 본문 헤더(KB국민카드xxxx)만으로 판단한다. */
-    var cardSmsSenders: Set<String>
-        get() = (p.getString("card_sms_senders", "") ?: "")
-            .split(',').map { digits(it) }.filter { it.isNotEmpty() }.toSet()
-        set(v) = p.edit { putString("card_sms_senders", v.joinToString(",")) }
+    // 카드 SMS 전용 설정(card_sms_enabled, card_sms_senders)은 규칙 엔진으로 대체되어 제거했다.
+    // 발신번호 필터는 이제 규칙의 source.senders 에 들어간다.
 
     /** 마지막으로 처리한 MMS(LMS) _id. -1이면 아직 초기화 전. */
     var lastMmsId: Long
@@ -67,8 +59,6 @@ class AppSettings(ctx: Context) {
         const val TRANSPORT_SYSLOG = "syslog"
         const val DEFAULT_HTTPS_URL = "https://api.bonoskkm15.duckdns.org/v1/events"
         private const val LEGACY_DEFAULT_DEVICE_ID = "galaxy-zflip7"
-
-        fun digits(s: String): String = s.filter { it.isDigit() }
 
         /** 사용자가 설정한 휴대폰 이름을 우선하고, 없으면 제조사·모델명으로 대체한다. */
         fun defaultDeviceName(ctx: Context): String {

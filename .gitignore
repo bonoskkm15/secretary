@@ -1,7 +1,10 @@
 *.iml
 .gradle/
+.kotlin/
 /local.properties
 /.idea/
+# README 의 IntelliJ 빌드 안내가 쓰는 GRADLE_USER_HOME / ANDROID_USER_HOME 위치
+/work/
 .DS_Store
 /build/
 /app/build/

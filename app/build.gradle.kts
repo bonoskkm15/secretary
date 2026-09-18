@@ -36,6 +36,13 @@ android {
     buildFeatures {
         compose = true
     }
+
+    testOptions {
+        unitTests {
+            // 규칙 엔진 테스트가 건드리는 Log 같은 스텁이 예외를 던지지 않게 한다.
+            isReturnDefaultValues = true
+        }
+    }
 }
 
 kotlin {
@@ -55,4 +62,5 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
 
     testImplementation(libs.junit)
+    testImplementation(libs.json)
 }

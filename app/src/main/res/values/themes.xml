@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      화면은 모두 Compose 로 그리므로 시스템 테마는 창 배경과 시스템 바만 담당한다.
+      실제 Material3 배색은 MainActivity 의 MaterialTheme 가 정한다.
+      minSdk 26 에서도 있는 속성만 쓴다 (DayNight 부모는 API 29부터라 쓰지 않는다).
+    -->
+    <style name="Theme.PhoneRelay" parent="android:Theme.DeviceDefault.Light.NoActionBar">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+</resources>

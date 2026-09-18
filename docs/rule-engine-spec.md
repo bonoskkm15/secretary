@@ -315,7 +315,8 @@ SendScheduler.sendNow()
 
 템플릿 엔진은 Android 의존성 없이 순수 Kotlin으로 작성하고 아래를 통과시킨다.
 
-1. 4.1 샘플 문자 → 7개 필드 값 정확히 추출 (`amount=83600`, `approved_at=2026-09-14T21:38+09:00`, `cumulative=5520828`, `status=approved`)
+1. 4.1 샘플 문자 → 7개 필드 값 정확히 추출 (`amount=83600`, `approved_at=2026-09-14T21:38:00+09:00`, `cumulative=5520828`, `status=approved`)
+   - `DateTimeFormatter.ISO_OFFSET_DATE_TIME`은 초가 0이어도 `:00`을 적는다. 값은 `21:38:00`이 맞다.
 2. 맨 앞 `[Web발신]` 줄이 있어도 매칭
 3. 연도 경계: `12/31 23:59` 승인 + `2027-01-01 00:01` 수신 → 2026년
 4. `승인취소` + `(03개월)` → `status=cancelled`, `payment_type=03개월`

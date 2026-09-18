@@ -58,6 +58,10 @@ object TemplateCompiler {
             if (literal.isEmpty() && captures.isNotEmpty()) {
                 throw TemplateCompileException("인접한 자리표시자는 구분 문자가 필요합니다")
             }
+            // 값 뒤에 템플릿에 없는 공백이 붙어 오는 경우가 많다(예: "누적 5,520,828 원").
+            if (captures.isNotEmpty() && literal.isNotEmpty() && !literal[0].isWhitespace()) {
+                regex.append("\\s*")
+            }
             appendFlexibleLiteral(regex, literal)
 
             val key = match.groupValues[1]
@@ -92,6 +96,9 @@ object TemplateCompiler {
         if (tail.contains('{') || tail.contains('}')) {
             throw TemplateCompileException("인식할 수 없는 자리표시자가 있습니다")
         }
+        if (captures.isNotEmpty() && tail.isNotEmpty() && !tail[0].isWhitespace()) {
+            regex.append("\\s*")
+        }
         appendFlexibleLiteral(regex, tail)
         if (captures.isEmpty()) throw TemplateCompileException("자리표시자를 하나 이상 지정하세요")
         return CompiledTemplate(normalized, regex.toString(), captures)
@@ -113,12 +120,20 @@ object TemplateCompiler {
             }
             if (result == null) return TemplateMatch.Failure("template_mismatch", failedLine(normalized))
             val rawValues = captures.associate { it.key to result.groupValues[it.groupIndex] }
-            val converted = buildMap {
-                captures.forEach { capture ->
-                    if (capture.key == "_") return@forEach
-                    val raw = rawValues[capture.key] ?: return@forEach
-                    put(capture.key, convert(capture, raw, receivedAtMillis))
+            // 정규식은 맞았지만 숫자·날짜 변환이 실패할 수 있다.
+            // 수집 스레드로 예외가 새어 나가면 안 되므로 여기서 불일치로 바꾼다.
+            val converted = try {
+                buildMap {
+                    captures.forEach { capture ->
+                        if (capture.key == "_") return@forEach
+                        val raw = rawValues[capture.key] ?: return@forEach
+                        put(capture.key, convert(capture, raw, receivedAtMillis))
+                    }
                 }
+            } catch (e: TemplateCompileException) {
+                return TemplateMatch.Failure(e.message ?: "value_convert_failed", failedLine(normalized))
+            } catch (e: NumberFormatException) {
+                return TemplateMatch.Failure("숫자 변환 실패: ${e.message}", failedLine(normalized))
             }
             return TemplateMatch.Success(converted, normalized)
         }
