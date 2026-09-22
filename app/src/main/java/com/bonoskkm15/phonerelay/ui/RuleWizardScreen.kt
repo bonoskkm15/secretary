@@ -1,5 +1,11 @@
 package com.bonoskkm15.phonerelay.ui
 
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.provider.Settings
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -7,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -29,11 +36,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.TextRange
-import androidx.compose.ui.text.input.TextFieldValue
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.unit.dp
+import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import com.bonoskkm15.phonerelay.core.PhoneEvent
 import com.bonoskkm15.phonerelay.core.Time
 import com.bonoskkm15.phonerelay.rule.PhoneRule
@@ -49,8 +58,8 @@ import com.bonoskkm15.phonerelay.rule.RuleMeta
 import com.bonoskkm15.phonerelay.rule.RuleOutput
 import com.bonoskkm15.phonerelay.rule.RuleSource
 import com.bonoskkm15.phonerelay.rule.RuleSourceKind
-import com.bonoskkm15.phonerelay.rule.TemplateCompiler
 import com.bonoskkm15.phonerelay.rule.TemplateCompileException
+import com.bonoskkm15.phonerelay.rule.TemplateCompiler
 import java.util.Locale
 import java.util.UUID
 
@@ -238,7 +247,18 @@ fun RuleWizardScreen(
         else -> null
     }
 
-    Column(Modifier.fillMaxSize().padding(16.dp)) {
+    // 시스템 뒤로가기: 이전 단계로. 첫 단계에서는 마법사를 닫는다.
+    // (없으면 마법사가 Scaffold 밖 화면이라 액티비티가 그대로 종료된다)
+    BackHandler {
+        if (step > 0) {
+            step--
+            error = ""
+        } else {
+            onCancel()
+        }
+    }
+
+    Column(Modifier.fillMaxSize().safeDrawingPadding().padding(16.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = onCancel) { Text("‹ 뒤로") }
             Column(Modifier.weight(1f)) {
@@ -370,10 +390,32 @@ fun RuleWizardScreen(
     }
 
     if (showSamplePicker) {
-        val samples = if (sourceKind == RuleSourceKind.SMS) loadRecentSmsSamples(ctx) else {
+        val isSms = sourceKind == RuleSourceKind.SMS
+        // 권한이 없어서 비어 있는 것과 아직 아무것도 안 쌓인 것을 구분해서 안내한다.
+        val permissionGranted = if (isSms) {
+            ContextCompat.checkSelfPermission(ctx, Manifest.permission.READ_SMS) ==
+                PackageManager.PERMISSION_GRANTED
+        } else {
+            NotificationManagerCompat.getEnabledListenerPackages(ctx).contains(ctx.packageName)
+        }
+        val samples = if (isSms) loadRecentSmsSamples(ctx) else {
             RecentRuleSamples.notifications(selectedPackages.map { it.packageName }.toSet())
         }
-        SamplePickerDialog(samples, onDismiss = { showSamplePicker = false }) { picked ->
+        SamplePickerDialog(
+            samples = samples,
+            isSms = isSms,
+            permissionGranted = permissionGranted,
+            onOpenSettings = {
+                val intent = if (isSms) {
+                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                        .setData(Uri.parse("package:" + ctx.packageName))
+                } else {
+                    Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+                }
+                runCatching { ctx.startActivity(intent) }
+            },
+            onDismiss = { showSamplePicker = false },
+        ) { picked ->
             sample = picked.textForWizard()
             template = TextFieldValue(sample)
             showSamplePicker = false
@@ -683,12 +725,31 @@ private fun FieldEditorDialog(
 }
 
 @Composable
-private fun SamplePickerDialog(samples: List<RuleInput>, onDismiss: () -> Unit, onSelect: (RuleInput) -> Unit) {
+private fun SamplePickerDialog(
+    samples: List<RuleInput>,
+    isSms: Boolean,
+    permissionGranted: Boolean,
+    onOpenSettings: () -> Unit,
+    onDismiss: () -> Unit,
+    onSelect: (RuleInput) -> Unit,
+) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("최근 샘플") },
         text = {
-            if (samples.isEmpty()) Text("샘플이 없거나 문자/알림 접근 권한이 없습니다.")
+            if (!permissionGranted) Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(if (isSms) "문자 읽기 권한이 꺼져 있습니다." else "알림 접근 권한이 꺼져 있습니다.")
+                Text(
+                    if (isSms) "허용하면 최근 문자 50건을 바로 불러옵니다."
+                    else "켠 뒤에 도착하는 알림부터 쌓입니다. 이미 지나간 알림은 읽을 수 없습니다.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                OutlinedButton(onClick = onOpenSettings) { Text("설정 열기") }
+            }
+            else if (samples.isEmpty()) Text(
+                if (isSms) "최근 문자가 없습니다."
+                else "아직 수집된 알림이 없습니다. 알림이 하나 도착하면 여기에 나타납니다."
+            )
             else Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
                 samples.forEachIndexed { index, item ->
                     TextButton(onClick = { onSelect(item) }, Modifier.fillMaxWidth()) {

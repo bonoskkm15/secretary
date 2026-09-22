@@ -4,12 +4,17 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -28,11 +33,19 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            MaterialTheme {
-                PhoneRelayRoot(
-                    refreshTick = refreshTick,
-                    onRefresh = { refreshTick++ },
-                )
+            // 배색을 시스템 모드에 맞춘다. 지정하지 않으면 Material3 가 항상
+            // lightColorScheme() 을 써서, 다크 모드의 어두운 창 배경 위에
+            // 어두운 글자가 올라가 아무것도 안 보인다.
+            MaterialTheme(
+                colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()
+            ) {
+                // 배경을 Compose 가 직접 칠한다. 없으면 XML 테마의 창 배경이 비친다.
+                Surface(modifier = Modifier.fillMaxSize()) {
+                    PhoneRelayRoot(
+                        refreshTick = refreshTick,
+                        onRefresh = { refreshTick++ },
+                    )
+                }
             }
         }
     }

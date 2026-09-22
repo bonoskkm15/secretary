@@ -30,12 +30,9 @@ object RuleStore {
     }
 
     fun remove(ctx: Context, id: String) = synchronized(this) {
-        val remaining = list(ctx).filterNot { it.id == id }
-        if (remaining.isEmpty()) {
-            save(ctx, listOf(PhoneRule.defaultKbCardRule(Time.nowIso())))
-        } else {
-            save(ctx, remaining)
-        }
+        // 마지막 규칙을 지워도 다시 심지 않는다. 빈 배열("[]")은 list() 가 그대로
+        // 빈 목록으로 읽으므로, 기본 프리셋은 최초 실행(키 자체가 없을 때)에만 들어간다.
+        save(ctx, list(ctx).filterNot { it.id == id })
     }
 
     fun duplicate(ctx: Context, id: String): PhoneRule? = synchronized(this) {

@@ -122,7 +122,7 @@ object TemplateCompiler {
             val rawValues = captures.associate { it.key to result.groupValues[it.groupIndex] }
             // 정규식은 맞았지만 숫자·날짜 변환이 실패할 수 있다.
             // 수집 스레드로 예외가 새어 나가면 안 되므로 여기서 불일치로 바꾼다.
-            val converted = try {
+            val converted: Map<String, Any?> = try {
                 buildMap {
                     captures.forEach { capture ->
                         if (capture.key == "_") return@forEach
