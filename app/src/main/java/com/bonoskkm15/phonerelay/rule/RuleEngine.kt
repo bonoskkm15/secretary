@@ -19,6 +19,8 @@ data class RulePreview(
     val normalizedText: String = "",
     val failedLine: Int? = null,
     val error: String? = null,
+    /** 규칙에 형식 목록이 있을 때 맞은 형식 이름. */
+    val format: String? = null,
 )
 
 data class RuleProcessReport(
@@ -93,6 +95,19 @@ object RuleEngine {
             return RulePreview(false, false, occurredAt = receivedIso(input.receivedAtMillis))
         }
 
+        // 한 앱에 여러 메시지 형식이 섞여 올 때, 등록한 형식만 통과시킨다. 안 맞으면 조용히 버린다.
+        val normalized = TemplateCompiler.normalize(raw)
+        val format = if (rule.match.formats.isEmpty()) null else {
+            RuleFormat.firstMatch(rule.match.formats, normalized)
+                ?: return RulePreview(
+                    considered = false,
+                    matched = false,
+                    occurredAt = receivedIso(input.receivedAtMillis),
+                    normalizedText = normalized,
+                    error = "등록한 포맷에 해당하지 않아 전송하지 않습니다",
+                )
+        }
+
         if (rule.match.rawOnly) {
             val text = mask(raw, rule.match.maskPatterns)
             return RulePreview(
@@ -100,7 +115,8 @@ object RuleEngine {
                 matched = true,
                 fields = mapOf("text" to text),
                 occurredAt = receivedIso(input.receivedAtMillis),
-                normalizedText = TemplateCompiler.normalize(raw),
+                normalizedText = normalized,
+                format = format?.name,
             )
         }
 
@@ -131,7 +147,7 @@ object RuleEngine {
                 val output = result.values.filterKeys { it in rule.output.fields }
                 val occurred = (rule.output.occurredAtField?.let { result.values[it] } as? String)
                     ?: receivedIso(input.receivedAtMillis)
-                RulePreview(true, true, output, occurred, result.normalizedText)
+                RulePreview(true, true, output, occurred, result.normalizedText, format = format?.name)
             }
             is TemplateMatch.Failure -> RulePreview(
                 considered = true,
@@ -201,6 +217,7 @@ object RuleEngine {
     private fun outputData(rule: PhoneRule, input: RuleInput, preview: RulePreview): JSONObject = JSONObject().apply {
         put("rule_id", rule.id)
         put("rule_name", rule.name)
+        preview.format?.let { put("format", it) }
         if (rule.output.meta.channel) put("channel", input.channel)
         if (rule.output.meta.receivedAt) put("received_at", receivedIso(input.receivedAtMillis))
         if (rule.output.meta.sender) put("sender", if (rule.output.meta.senderMask) maskSender(input.sender) else input.sender)
