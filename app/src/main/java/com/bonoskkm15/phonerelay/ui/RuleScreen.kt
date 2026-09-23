@@ -128,6 +128,7 @@ private fun RuleCard(
 }
 
 private fun outputSummary(rule: PhoneRule): String = when {
+    rule.match.rawOnly && rule.match.formats.isNotEmpty() -> "원문 · 포맷 ${rule.match.formats.joinToString("/") { it.name }}"
     rule.match.rawOnly -> "원문"
     rule.output.fields.isEmpty() -> "필드 없음"
     else -> "필드 ${rule.output.fields.size}개"

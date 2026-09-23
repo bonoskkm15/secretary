@@ -97,6 +97,74 @@ data class RuleSource(
     }
 }
 
+/**
+ * 한 출처(앱·발신번호) 안에서 보낼 메시지 형식 하나.
+ * 원문 전송 규칙에서 쓰며, 등록된 형식 중 하나라도 맞아야 전송한다.
+ */
+data class RuleFormat(
+    val name: String,
+    val kind: String = KIND_STARTS_WITH,
+    val value: String,
+) {
+    fun toJson(): JSONObject = JSONObject()
+        .put("name", name)
+        .put("kind", kind)
+        .put("value", value)
+
+    /** [normalized]는 TemplateCompiler.normalize 를 거친 텍스트. */
+    fun matches(normalized: String): Boolean {
+        if (value.isEmpty()) return false
+        return when (kind) {
+            KIND_CONTAINS -> normalized.contains(value)
+            KIND_REGEX -> runCatching { Regex(value).containsMatchIn(normalized) }.getOrDefault(false)
+            else -> normalized.lineSequence().firstOrNull().orEmpty().startsWith(value)
+        }
+    }
+
+    fun describe(): String = when (kind) {
+        KIND_CONTAINS -> "'$value' 포함"
+        KIND_REGEX -> "정규식 $value"
+        else -> "첫 줄이 '$value'(으)로 시작"
+    }
+
+    companion object {
+        const val KIND_STARTS_WITH = "starts_with"
+        const val KIND_CONTAINS = "contains"
+        const val KIND_REGEX = "regex"
+        val KINDS = setOf(KIND_STARTS_WITH, KIND_CONTAINS, KIND_REGEX)
+
+        fun fromJson(json: JSONObject): RuleFormat? {
+            val value = json.optString("value").trim().ifEmpty { return null }
+            val kind = json.optString("kind", KIND_STARTS_WITH).takeIf { it in KINDS } ?: KIND_STARTS_WITH
+            return RuleFormat(
+                name = json.optString("name").trim().ifEmpty { value },
+                kind = kind,
+                value = value,
+            )
+        }
+
+        /** 등록 순서대로 처음 맞는 형식. 목록이 비어 있으면 null. */
+        fun firstMatch(formats: List<RuleFormat>, normalized: String): RuleFormat? =
+            formats.firstOrNull { it.matches(normalized) }
+
+        /**
+         * 샘플에서 형식 조건을 자동으로 제안한다.
+         * 첫 줄에서 숫자·금액이 시작되기 전까지를 시작 문구로 쓴다. 예: "출금 10,000원" → "출금".
+         */
+        fun suggestFrom(text: String): RuleFormat? {
+            val firstLine = TemplateCompiler.normalize(text).lineSequence().firstOrNull()?.trim().orEmpty()
+            if (firstLine.isEmpty()) return null
+            val cut = firstLine.indexOfFirst { it.isDigit() }
+            val prefix = (if (cut > 0) firstLine.substring(0, cut) else firstLine)
+                .trimEnd(' ', ':', '-', '·', '/', '(', '[')
+                .trim()
+                .ifEmpty { firstLine.take(10) }
+                .take(20)
+            return RuleFormat(name = prefix, kind = KIND_STARTS_WITH, value = prefix)
+        }
+    }
+}
+
 data class RuleMatch(
     val mode: String = MODE_FULL,
     val include: List<String> = emptyList(),
@@ -104,6 +172,8 @@ data class RuleMatch(
     val rawOnly: Boolean = false,
     val reportMismatch: Boolean = true,
     val maskPatterns: List<String> = listOf("(?m)^고객명 .*$"),
+    /** 비어 있으면 모든 메시지, 있으면 이 중 하나라도 맞는 메시지만 처리한다. */
+    val formats: List<RuleFormat> = emptyList(),
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("mode", mode)
@@ -112,6 +182,7 @@ data class RuleMatch(
         put("rawOnly", rawOnly)
         put("reportMismatch", reportMismatch)
         put("maskPatterns", JSONArray(maskPatterns))
+        put("formats", JSONArray().also { array -> formats.forEach { array.put(it.toJson()) } })
     }
 
     companion object {
@@ -125,6 +196,12 @@ data class RuleMatch(
             rawOnly = json.optBoolean("rawOnly", false),
             reportMismatch = json.optBoolean("reportMismatch", true),
             maskPatterns = json.stringList("maskPatterns"),
+            formats = buildList {
+                val array = json.optJSONArray("formats") ?: JSONArray()
+                for (i in 0 until array.length()) {
+                    RuleFormat.fromJson(array.optJSONObject(i) ?: continue)?.let(::add)
+                }
+            },
         )
     }
 }
